@@ -1,12 +1,21 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+    <!--
+      index.html — Point d'entrée HTML
+      L'attribut 'lang="fr"' indique que le contenu est en français.
+      Le meta viewport garantit un rendu responsive sur mobile.
+    -->
+    <title>EventHub — Billetterie en ligne</title>
   </head>
   <body>
+    <!--
+      L'attribut 'id="root"' est le point d'ancrage où React
+      injectera le composant App.
+      Ne pas modifier cet ID : il est référencé dans main.jsx.
+    -->
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
