@@ -35,7 +35,9 @@ if (!fs.existsSync(DB_DIR)) {
   fs.mkdirSync(DB_DIR, { recursive: true });
 }
 
-const db = new Database(DB_PATH);
+import type { Database } from 'better-sqlite3';
+
+const db: Database = new Database(DB_PATH);
 
 // Mode WAL pour de meilleures performances en lecture concurrence
 db.pragma('journal_mode = WAL');

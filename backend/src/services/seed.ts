@@ -1,15 +1,15 @@
 /**
- * Seed des données de démonstration
+ * Seed des donnees de demonstration
  *
- * Ce fichier initialise la base de données avec des données de test
- * conformes à l'énoncé du projet EventHub.
+ * Ce fichier initialise la base de donnees avec des donnees de test
+ * conformes a l'enonce du projet EventHub.
  *
- * Données à insérer :
+ * Donnees a inserer :
  * - 3 utilisateurs (organisateur, utilisateur, admin)
- * - 5 événements de démonstration
+ * - 5 evenements de demonstration
  *
- * Les données de démo permettent de tester l'application immédiatement
- * sans avoir à créer manuellement des comptes et des événements.
+ * Les donnees de demo permettent de tester l'application immediatement
+ * sans avoir a creer manuellement des comptes et des evenements.
  */
 
 import db from './db.js';
@@ -20,7 +20,7 @@ export async function seedDemoData(): Promise<void> {
   console.log('Seeding demo data...');
 
   // =============================================================================
-  // UTILISATEURS DE DÉMO
+  // UTILISATEURS DE DEMO
   // =============================================================================
 
   const usersData = [
@@ -59,21 +59,21 @@ export async function seedDemoData(): Promise<void> {
   }
 
   // =============================================================================
-  // ÉVÉNEMENTS DE DÉMONSTRATION
+  // EVENEMENTS DE DEMONSTRATION
   // =============================================================================
 
-  // On récupère l'ID de l'organisateur pour l'associer aux événements
+  // On recupere l'ID de l'organisateur pour l'associer aux evenements
   const organizer = await db.users.findByEmail('organisateur@example.com');
 
   if (!organizer) {
-    console.error('Organisateur not found — skipping event seed');
+    console.error('Organisateur non trouve — skip event seed');
     return;
   }
 
   const eventsData = [
     {
       title: 'Concert Jazz au Sunset',
-      description: 'Une soirée jazz exceptionnelle avec le quartet de Pierre Lenoir. Ambiance intimiste et musicale au cœur de Paris.',
+      description: 'Une soir jazz exception avec le quartet de Pierre Lenoir. Ambiance intimiste et musicale au coeur de Paris.',
       date: '2026-06-15',
       time: '20:30',
       location: 'Le Sunset',
@@ -83,19 +83,19 @@ export async function seedDemoData(): Promise<void> {
       category: EventCategory.CONCERT,
     },
     {
-      title: 'Conférence Tech Leaders',
-      description: 'Les meilleurs experts tech partagent leurs retours d'expérience sur l'architecture des systèmes distribués à grande échelle.',
+      title: 'Conference Tech Leaders',
+      description: 'Les meilleurs experts tech partagent leurs retours sur l architecture des systemes distribues a grande echelle.',
       date: '2026-05-20',
       time: '09:00',
-      location: 'Centre de Congrès',
+      location: 'Centre de Congres',
       city: 'Lyon',
       price: 50,
       totalPlaces: 200,
       category: EventCategory.CONFERENCE,
     },
     {
-      title: 'Festival Électro Summer',
-      description: '3 scènes, 20 artistes, une nuit entière de musique électronique. Le rendez-vous incontournable de lété marseillais.',
+      title: 'Festival Electro Summer',
+      description: '3 scenes, 20 artistes, une nuit entiere de musique electronique. Le rendez-vous incontournable de ete marsseillais.',
       date: '2026-07-10',
       time: '22:00',
       location: 'Parc des Expositions',
@@ -106,7 +106,7 @@ export async function seedDemoData(): Promise<void> {
     },
     {
       title: 'Match de Gala',
-      description: 'Match de charité opposant les légendes du football français aux anciens internationaux. Un événement sportif et solidaire.',
+      description: 'Match de charite opposant les legendes du football francais aux anciens internationaux. Un evenement sportif et solidaire.',
       date: '2026-06-01',
       time: '19:00',
       location: 'Stade Chaban-Delmas',
@@ -116,11 +116,11 @@ export async function seedDemoData(): Promise<void> {
       category: EventCategory.SPORT,
     },
     {
-      title: 'Hamlet - Comédie Française',
-      description: 'La tragédie universelle de Shakespeare dans une mise en scène contemporaine par la troupe de la Comédie Française.',
+      title: 'Hamlet - Comedie Francaise',
+      description: 'La tragedie universelle de Shakespeare dans une mise en scene contemporaine par la troupe de la Comedie Francaise.',
       date: '2026-05-25',
       time: '20:00',
-      location: 'Théâtre de lOdéon',
+      location: 'Theatre de l Odeon',
       city: 'Paris',
       price: 40,
       totalPlaces: 80,
@@ -129,7 +129,7 @@ export async function seedDemoData(): Promise<void> {
   ];
 
   for (const eventData of eventsData) {
-    // On vérifie qu'un événement avec ce titre n'existe pas déjà
+    // On verifie qu'un evenement avec ce titre n'existe pas deja
     const existingEvents = db.events.findAll();
     const exists = existingEvents.some(e => e.title === eventData.title);
 
