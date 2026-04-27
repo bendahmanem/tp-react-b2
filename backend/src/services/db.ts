@@ -1,18 +1,16 @@
 /**
- * Base de données en mémoire — Store EventHub
+ * Couche d'accès aux données — EventHub (SQLite)
  *
- * Ce fichier simule une base de données en mémoire.
- * Dans une application réelle, on utiliserait SQLite, PostgreSQL, etc.
+ * Ce fichier remplace le store en mémoire par des opérations SQLite.
+ * Chaque fonction correspond à une requête SQL préparée.
  *
- * Architecture du store :
- * - Chaque collection (users, events, tickets) est un Map
- * - Les clés sont les IDs (UUID)
- * - Les Maps permettent un accès O(1) par clé
- *
- * Pour la persistance, on pourrait ultérieurement ajouter
- * un adapter SQLite ou PostgreSQL.
+ * Avantages de SQLite vs in-memory :
+ * - Persistance des données entre les redémarrages
+ * - Transactions ACID pour la cohérence des données
+ * - Requêtes complexes via SQL (JOIN, GROUP BY, etc.)
  */
 
+import db from './database.js';
 import { User, CreateUserDto, UserRole } from '../models/user.js';
 import { Event, CreateEventDto, UpdateEventDto, EventCategory, EventFilters } from '../models/event.js';
 import { Ticket, CreateTicketDto, TicketStatus, TicketStats } from '../models/ticket.js';
@@ -20,19 +18,11 @@ import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 
 // =============================================================================
-// STORES (collections en mémoire)
-// =============================================================================
-
-const users = new Map<string, User>();
-const events = new Map<string, Event>();
-const tickets = new Map<string, Ticket>();
-
-// =============================================================================
 // HELPERS
 // =============================================================================
 
-function now(): Date {
-  return new Date();
+function now(): string {
+  return new Date().toISOString();
 }
 
 // =============================================================================
@@ -40,61 +30,80 @@ function now(): Date {
 // =============================================================================
 
 async function createUser(dto: CreateUserDto): Promise<User> {
-  // Vérification email unique
-  const existingEmail = [...users.values()].find(u => u.email === dto.email);
-  if (existingEmail) {
+  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(dto.email);
+  if (existing) {
     throw new Error('EMAIL_ALREADY_EXISTS');
   }
 
-  // Hashage du mot de passe avec bcrypt
-  // bcrypt est un algorithme de hashage conçu pour les mots de passe
-  // Il est lent intentionnellement pour ralentir les attaques par force brute
-  const saltRounds = 10;
-  const passwordHash = await bcrypt.hash(dto.password, saltRounds);
+  const id = uuidv4();
+  const passwordHash = await bcrypt.hash(dto.password, 10);
+  const createdAt = now();
 
-  const user: User = {
-    id: uuidv4(),
+  db.prepare(`
+    INSERT INTO users (id, email, password_hash, name, role, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, dto.email, passwordHash, dto.name, dto.role ?? UserRole.USER, createdAt, createdAt);
+
+  return {
+    id,
     email: dto.email,
-    passwordHash,
     name: dto.name,
     role: dto.role ?? UserRole.USER,
-    createdAt: now(),
-    updatedAt: now(),
-  };
-
-  users.set(user.id, user);
-  return user;
+    createdAt: new Date(createdAt),
+    updatedAt: new Date(createdAt),
+  } as User;
 }
 
 async function findUserByEmail(email: string): Promise<User | undefined> {
-  return [...users.values()].find(u => u.email === email);
+  const row = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+  if (!row) return undefined;
+  return {
+    id: row.id,
+    email: row.email,
+    passwordHash: row.password_hash,
+    name: row.name,
+    role: row.role as UserRole,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  };
 }
 
 async function findUserById(id: string): Promise<User | undefined> {
-  return users.get(id);
+  const row = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as any;
+  if (!row) return undefined;
+  return {
+    id: row.id,
+    email: row.email,
+    passwordHash: row.password_hash,
+    name: row.name,
+    role: row.role as UserRole,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  };
 }
 
 async function verifyPassword(user: User, password: string): Promise<boolean> {
-  // bcrypt.compare compare le mot de passe en clair avec le hash stocké
   return bcrypt.compare(password, user.passwordHash);
 }
 
 function updateUser(id: string, dto: { name: string }): User {
-  const user = users.get(id);
+  const updatedAt = now();
+  db.prepare('UPDATE users SET name = ?, updated_at = ? WHERE id = ?').run(dto.name, updatedAt, id);
+  const user = findUserById(id);
   if (!user) throw new Error('USER_NOT_FOUND');
-
-  const updated: User = {
-    ...user,
-    name: dto.name,
-    updatedAt: now(),
-  };
-
-  users.set(id, updated);
-  return updated;
+  return user;
 }
 
 function getAllUsers(): User[] {
-  return [...users.values()];
+  const rows = db.prepare('SELECT * FROM users').all() as any[];
+  return rows.map(row => ({
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    role: row.role,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  }));
 }
 
 // =============================================================================
@@ -102,103 +111,115 @@ function getAllUsers(): User[] {
 // =============================================================================
 
 function createEvent(dto: CreateEventDto, organizerId: string): Event {
-  const event: Event = {
-    id: uuidv4(),
-    title: dto.title,
-    description: dto.description,
-    date: dto.date,
-    time: dto.time,
-    location: dto.location,
-    city: dto.city,
-    price: dto.price,
-    totalPlaces: dto.totalPlaces,
-    availablePlaces: dto.totalPlaces,
-    category: dto.category,
-    image: dto.image,
-    organizerId,
-    createdAt: now(),
-    updatedAt: now(),
-  };
+  const id = uuidv4();
+  const createdAt = now();
 
-  events.set(event.id, event);
-  return event;
+  db.prepare(`
+    INSERT INTO events (id, title, description, date, time, location, city, price, total_places, available_places, category, image, organizer_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id, dto.title, dto.description, dto.date, dto.time,
+    dto.location, dto.city, dto.price, dto.totalPlaces,
+    dto.totalPlaces, // available = total au départ
+    dto.category, dto.image ?? null, organizerId, createdAt, createdAt
+  );
+
+  return findEventById(id)!;
 }
 
 function findEventById(id: string): Event | undefined {
-  return events.get(id);
+  const row = db.prepare('SELECT * FROM events WHERE id = ?').get(id) as any;
+  if (!row) return undefined;
+  return mapRowToEvent(row);
 }
 
 function findEvents(filters?: EventFilters): Event[] {
-  let result = [...events.values()];
+  let sql = 'SELECT * FROM events WHERE 1=1';
+  const params: any[] = [];
 
-  // Filtre catégorie
   if (filters?.category) {
-    result = result.filter(e => e.category === filters.category);
+    sql += ' AND category = ?';
+    params.push(filters.category);
   }
 
-  // Filtre ville (insensible à la casse)
   if (filters?.city) {
-    result = result.filter(e =>
-      e.city.toLowerCase().includes(filters.city!.toLowerCase())
-    );
+    sql += ' AND LOWER(city) LIKE LOWER(?)';
+    params.push(`%${filters.city}%`);
   }
 
-  // Filtre prix max
   if (filters?.maxPrice !== undefined) {
-    result = result.filter(e => e.price <= filters.maxPrice!);
+    sql += ' AND price <= ?';
+    params.push(filters.maxPrice);
   }
 
-  // Filtre prix min
   if (filters?.minPrice !== undefined) {
-    result = result.filter(e => e.price >= filters.minPrice!);
+    sql += ' AND price >= ?';
+    params.push(filters.minPrice);
   }
 
-  // Filtre événements à venir uniquement
   if (filters?.upcomingOnly) {
-    const today = new Date().toISOString().split('T')[0];
-    result = result.filter(e => e.date >= today);
+    sql += ` AND date >= '${new Date().toISOString().split('T')[0]}'`;
   }
 
-  // Tri par date (les plus proches en premier)
-  result.sort((a, b) => a.date.localeCompare(b.date));
+  sql += ' ORDER BY date ASC';
 
-  return result;
+  const rows = db.prepare(sql).all(...params) as any[];
+  return rows.map(mapRowToEvent);
 }
 
 function findEventsByOrganizer(organizerId: string): Event[] {
-  return [...events.values()].filter(e => e.organizerId === organizerId);
+  const rows = db.prepare('SELECT * FROM events WHERE organizer_id = ? ORDER BY date ASC').all(organizerId) as any[];
+  return rows.map(mapRowToEvent);
 }
 
 function updateEvent(id: string, dto: UpdateEventDto): Event {
-  const event = events.get(id);
+  const event = findEventById(id);
   if (!event) throw new Error('EVENT_NOT_FOUND');
 
-  const updated: Event = {
-    ...event,
-    ...dto,
-    // Si totalPlaces est modifié, on ajuste aussi availablePlaces
-    // selon le nombre de billets déjà vendus
-    availablePlaces: dto.totalPlaces !== undefined
-      ? dto.totalPlaces - (event.totalPlaces - event.availablePlaces)
-      : event.availablePlaces,
-    updatedAt: now(),
-  };
+  const updates: string[] = [];
+  const params: any[] = [];
 
-  events.set(id, updated);
-  return updated;
+  if (dto.title !== undefined) { updates.push('title = ?'); params.push(dto.title); }
+  if (dto.description !== undefined) { updates.push('description = ?'); params.push(dto.description); }
+  if (dto.date !== undefined) { updates.push('date = ?'); params.push(dto.date); }
+  if (dto.time !== undefined) { updates.push('time = ?'); params.push(dto.time); }
+  if (dto.location !== undefined) { updates.push('location = ?'); params.push(dto.location); }
+  if (dto.city !== undefined) { updates.push('city = ?'); params.push(dto.city); }
+  if (dto.price !== undefined) { updates.push('price = ?'); params.push(dto.price); }
+  if (dto.category !== undefined) { updates.push('category = ?'); params.push(dto.category); }
+  if (dto.image !== undefined) { updates.push('image = ?'); params.push(dto.image ?? null); }
+
+  if (dto.totalPlaces !== undefined) {
+    const sold = event.totalPlaces - event.availablePlaces;
+    const newAvailable = dto.totalPlaces - sold;
+    updates.push('total_places = ?');
+    params.push(dto.totalPlaces);
+    updates.push('available_places = ?');
+    params.push(Math.max(0, newAvailable));
+  }
+
+  if (updates.length === 0) return event;
+
+  updates.push('updated_at = ?');
+  params.push(now());
+  params.push(id);
+
+  db.prepare(`UPDATE events SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  return findEventById(id)!;
 }
 
 function deleteEvent(id: string): boolean {
-  const event = events.get(id);
+  const event = findEventById(id);
   if (!event) return false;
 
-  // Vérifier si des billets ont été vendus
-  const soldTickets = [...tickets.values()].filter(t => t.eventId === id);
-  if (soldTickets.length > 0) {
+  const sold = db.prepare('SELECT COUNT(*) as count FROM tickets WHERE event_id = ? AND status != ?').get(id, TicketStatus.CANCELLED) as any;
+  if (sold && sold.count > 0) {
     throw new Error('EVENT_HAS_SOLD_TICKETS');
   }
 
-  return events.delete(id);
+  db.prepare('DELETE FROM tickets WHERE event_id = ?').run(id);
+  const result = db.prepare('DELETE FROM events WHERE id = ?').run(id);
+  return result.changes > 0;
 }
 
 // =============================================================================
@@ -206,97 +227,138 @@ function deleteEvent(id: string): boolean {
 // =============================================================================
 
 function createTicket(dto: CreateTicketDto): Ticket {
-  const event = events.get(dto.eventId);
+  const event = findEventById(dto.eventId);
   if (!event) throw new Error('EVENT_NOT_FOUND');
 
-  // Vérification des places disponibles
   if (event.availablePlaces <= 0) {
     throw new Error('EVENT_SOLD_OUT');
   }
 
-  // Vérification que l'événement n'est pas dans le passé
   const today = new Date().toISOString().split('T')[0];
   if (event.date < today) {
     throw new Error('EVENT_PAST');
   }
 
-  const ticket: Ticket = {
-    id: uuidv4(),
-    qrCode: uuidv4(), // UUID utilisé comme QR code unique
+  const id = uuidv4();
+  const qrCode = uuidv4();
+  const purchaseDate = now();
+
+  db.prepare(`
+    INSERT INTO tickets (id, qr_code, event_id, user_id, status, purchase_date)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(id, qrCode, dto.eventId, dto.userId, TicketStatus.VALID, purchaseDate);
+
+  db.prepare('UPDATE events SET available_places = available_places - 1 WHERE id = ?').run(dto.eventId);
+
+  return {
+    id,
+    qrCode,
     eventId: dto.eventId,
     userId: dto.userId,
     status: TicketStatus.VALID,
-    purchaseDate: now(),
+    purchaseDate: new Date(purchaseDate),
   };
-
-  tickets.set(ticket.id, ticket);
-
-  // Décrémenter les places disponibles
-  event.availablePlaces -= 1;
-  events.set(event.id, event);
-
-  return ticket;
 }
 
 function findTicketById(id: string): Ticket | undefined {
-  return tickets.get(id);
+  const row = db.prepare('SELECT * FROM tickets WHERE id = ?').get(id) as any;
+  if (!row) return undefined;
+  return mapRowToTicket(row);
 }
 
 function findTicketsByUser(userId: string): Ticket[] {
-  return [...tickets.values()].filter(t => t.userId === userId);
+  const rows = db.prepare('SELECT * FROM tickets WHERE user_id = ? ORDER BY purchase_date DESC').all(userId) as any[];
+  return rows.map(mapRowToTicket);
 }
 
 function findTicketsByEvent(eventId: string): Ticket[] {
-  return [...tickets.values()].filter(t => t.eventId === eventId);
+  const rows = db.prepare('SELECT * FROM tickets WHERE event_id = ?').all(eventId) as any[];
+  return rows.map(mapRowToTicket);
 }
 
 function updateTicketStatus(id: string, status: TicketStatus): Ticket {
-  const ticket = tickets.get(id);
+  const ticket = findTicketById(id);
   if (!ticket) throw new Error('TICKET_NOT_FOUND');
 
-  const updated: Ticket = {
-    ...ticket,
-    status,
-    ...(status === TicketStatus.USED ? { usedAt: now() } : {}),
-    ...(status === TicketStatus.CANCELLED ? { cancelledAt: now() } : {}),
-  };
+  const updates: string[] = ['status = ?'];
+  const params: any[] = [status];
 
-  tickets.set(id, updated);
-
-  // Si billet annulé, remettre la place en disponibilité
-  if (status === TicketStatus.CANCELLED) {
-    const event = events.get(ticket.eventId);
-    if (event) {
-      event.availablePlaces += 1;
-      events.set(event.id, event);
-    }
+  if (status === TicketStatus.USED) {
+    updates.push('used_at = ?');
+    params.push(now());
+  } else if (status === TicketStatus.CANCELLED) {
+    updates.push('cancelled_at = ?');
+    params.push(now());
   }
 
-  return updated;
+  params.push(id);
+  db.prepare(`UPDATE tickets SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+
+  if (status === TicketStatus.CANCELLED) {
+    db.prepare('UPDATE events SET available_places = available_places + 1 WHERE id = ?').run(ticket.eventId);
+  }
+
+  return findTicketById(id)!;
 }
 
 function getTicketStatsByOrganizer(organizerId: string): TicketStats {
-  const organizerEvents = findEventsByOrganizer(organizerId);
-  const organizerEventIds = new Set(organizerEvents.map(e => e.id));
-
-  const organizerTickets = [...tickets.values()].filter(t =>
-    organizerEventIds.has(t.eventId)
-  );
+  const rows = db.prepare(`
+    SELECT t.* FROM tickets t
+    JOIN events e ON t.event_id = e.id
+    WHERE e.organizer_id = ?
+  `).all(organizerId) as any[];
 
   let totalRevenue = 0;
-  for (const ticket of organizerTickets) {
-    const event = events.get(ticket.eventId);
-    if (event && ticket.status !== TicketStatus.CANCELLED) {
+  for (const row of rows) {
+    const event = findEventById(row.event_id);
+    if (event && row.status !== TicketStatus.CANCELLED) {
       totalRevenue += event.price;
     }
   }
 
   return {
-    totalTickets: organizerTickets.length,
-    validTickets: organizerTickets.filter(t => t.status === TicketStatus.VALID).length,
-    usedTickets: organizerTickets.filter(t => t.status === TicketStatus.USED).length,
-    cancelledTickets: organizerTickets.filter(t => t.status === TicketStatus.CANCELLED).length,
+    totalTickets: rows.length,
+    validTickets: rows.filter(r => r.status === TicketStatus.VALID).length,
+    usedTickets: rows.filter(r => r.status === TicketStatus.USED).length,
+    cancelledTickets: rows.filter(r => r.status === TicketStatus.CANCELLED).length,
     totalRevenue,
+  };
+}
+
+// =============================================================================
+// HELPERS DE MAPPING
+// =============================================================================
+
+function mapRowToEvent(row: any): Event {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    date: row.date,
+    time: row.time,
+    location: row.location,
+    city: row.city,
+    price: row.price,
+    totalPlaces: row.total_places,
+    availablePlaces: row.available_places,
+    category: row.category as EventCategory,
+    image: row.image ?? undefined,
+    organizerId: row.organizer_id,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  };
+}
+
+function mapRowToTicket(row: any): Ticket {
+  return {
+    id: row.id,
+    qrCode: row.qr_code,
+    eventId: row.event_id,
+    userId: row.user_id,
+    status: row.status as TicketStatus,
+    purchaseDate: new Date(row.purchase_date),
+    usedAt: row.used_at ? new Date(row.used_at) : undefined,
+    cancelledAt: row.cancelled_at ? new Date(row.cancelled_at) : undefined,
   };
 }
 

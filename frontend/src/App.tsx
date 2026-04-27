@@ -1,95 +1,58 @@
 /**
- * EventHub — Application frontend React
+ * EventHub — Composant racine de l'application React
  *
- * Ce fichier est le point d'entrée de l'interface utilisateur.
- * Il展示了 React 的核心概念 pour les étudiants qui découvrent la bibliothèque.
- *
- * Concepts clés demostrés dans ce fichier :
- * - useState : gestion d'état local (étatReact)
- * - Componentes : réutilisabilité
- * - Props : transmission de données entre composants
- * - Conditional rendering : affichage conditionnel
- *
- * Structure de l'application :
- * App (composant racine)
- *   ├── Header (navigation + auth)
- *   ├── EventList (liste des événements)
- *   ├── EventCard (carte événement individuelle)
- *   ├── EventDetail (détail d'un événement)
- *   └── Auth (inscription / connexion)
+ * Ce fichier constitue le point d'entrée de l'interface utilisateur.
+ * Il展示了 les fondamentaux de React pour les étudiants.
  */
 
 import { useState } from 'react'
+import type { User, Event, ViewName } from './types'
 import './App.css'
 
 // ============================================================
-// COMPOSANT : App (composant racine)
+// COMPOSANT PRINCIPAL : App
 // ============================================================
-// Un composant React est simplement une fonction qui retourne
-// du JSX (HTML en syntaxe JavaScript).
-// Les composants permettent de découper l'UI en pièces réutilisables.
 
 function App() {
-  // --------------------------------------------------------
-  // useState : le hook d'état de React
-  // --------------------------------------------------------
-  // useState renvoie un tableau [currentValue, setterFunction]
-  // Ici, 'events' stocke la liste des événements
-  // et 'setEvents' permet de la mettre à jour (réactif)
-  const [events, setEvents] = useState([])
-  const [selectedEvent, setSelectedEvent] = useState(null)
-  const [currentView, setCurrentView] = useState('home') // 'home' | 'detail' | 'login' | 'register' | 'my-tickets'
-  const [user, setUser] = useState(null) // null = non connecté, objet = connecté
+  // state : liste des événements chargés depuis l'API
+  const [events, setEvents] = useState<Event[]>([])
+  // state : événement actuellement sélectionné (pour la vue détail)
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
+  // state : vue actuelle (navigation entre pages)
+  const [currentView, setCurrentView] = useState<ViewName>('home')
+  // state : utilisateur connecté (null = non connecté)
+  const [user, setUser] = useState<User | null>(null)
 
-  // --------------------------------------------------------
-  // Fonction de navigation
-  // --------------------------------------------------------
-  // Permet de changer la vue affichée sans recharger la page
-  // C'est le principe du Single Page Application (SPA)
-  const navigateTo = (view, event = null) => {
+  // Navigation vers une vue + event optionnel
+  const navigateTo = (view: ViewName, event: Event | null = null) => {
     setCurrentView(view)
     setSelectedEvent(event)
   }
 
-  // --------------------------------------------------------
-  // Fonction de connexion (simulation)
-  // --------------------------------------------------------
-  // En conditions réelles, cette fonction appellerait une API
-  // et stockerait le token JWT dans le localStorage
-  const handleLogin = (userData) => {
+  // Connexion — en production, appeler l'API POST /auth/login
+  const handleLogin = (userData: User) => {
     setUser(userData)
     navigateTo('home')
   }
 
-  // --------------------------------------------------------
-  // Fonction de déconnexion
-  // --------------------------------------------------------
+  // Déconnexion
   const handleLogout = () => {
     setUser(null)
     navigateTo('home')
   }
 
-  // ============================================================
-  // RENDU CONDITIONNEL
-  // ============================================================
-  // En React, on peut décider d'afficher tel ou tel élément
-  // en fonction de l'état de l'application (ici : currentView)
-
   return (
     <div className="app">
-      {/* Header : toujours visible, gère la navigation globale */}
       <Header
         user={user}
-        currentView={currentView}
         onNavigate={navigateTo}
         onLogout={handleLogout}
       />
 
-      {/* Routage interne : on affiche tel ou tel composant selon la vue */}
       {currentView === 'home' && (
         <EventList
           events={events}
-          onSelectEvent={(event) => navigateTo('detail', event)}
+          onSelectEvent={(event: Event) => navigateTo('detail', event)}
         />
       )}
 
@@ -126,26 +89,28 @@ function App() {
 
 // ============================================================
 // COMPOSANT : Header
+// Navigation globale + état de connexion
 // ============================================================
-// Les Props sont le mécanisme de передачи данных d'un
-// composant parent vers un composant enfant.
-// C'est analogous à les paramètres d'une fonction.
-function Header({ user, currentView, onNavigate, onLogout }) {
+
+interface HeaderProps {
+  user: User | null
+  onNavigate: (view: ViewName, event?: Event | null) => void
+  onLogout: () => void
+}
+
+function Header({ user, onNavigate, onLogout }: HeaderProps) {
   return (
     <header className="header">
       <div className="header-content">
-        {/* Logo cliquable → retour à l'accueil */}
         <h1 className="logo" onClick={() => onNavigate('home')}>
           EventHub
         </h1>
 
-        {/* Navigation principale */}
         <nav className="nav">
           <button onClick={() => onNavigate('home')}>
             Événements
           </button>
 
-          {/* Affichage conditionnel selon l'état de connexion */}
           {user ? (
             <>
               <button onClick={() => onNavigate('my-tickets')}>
@@ -174,15 +139,23 @@ function Header({ user, currentView, onNavigate, onLogout }) {
 
 // ============================================================
 // COMPOSANT : EventList
+// Affiche la grille des événements disponibles
 // ============================================================
-// Affiche la liste de tous les événements disponibles.
-// 'events' et 'onSelectEvent' sont des props reçues du parent.
-function EventList({ events, onSelectEvent }) {
+
+interface EventListProps {
+  events: Event[]
+  onSelectEvent: (event: Event) => void
+}
+
+function EventList({ events, onSelectEvent }: EventListProps) {
   if (events.length === 0) {
     return (
-      <div className="empty-state">
-        <p>Aucun événement disponible pour le moment.</p>
-      </div>
+      <main className="event-list">
+        <h2>Événements à venir</h2>
+        <div className="empty-state">
+          <p>Aucun événement disponible pour le moment.</p>
+        </div>
+      </main>
     )
   }
 
@@ -190,10 +163,6 @@ function EventList({ events, onSelectEvent }) {
     <main className="event-list">
       <h2>Événements à venir</h2>
 
-      {/* La méthode .map() permet de parcourir un tableau et
-          de retourner un élément JSX pour chaque item.
-          La clé 'key' est obligatoire pour aider React à
-          identifier chaque élément de manière unique. */}
       <div className="events-grid">
         {events.map((event) => (
           <EventCard
@@ -209,14 +178,17 @@ function EventList({ events, onSelectEvent }) {
 
 // ============================================================
 // COMPOSANT : EventCard
+// Carte individuelle d'événement — réutilisable
 // ============================================================
-// Carte individuelle pour un événement.
-// Réutilisable : on peut l'utiliser dans plusieurs contextes
-// (liste, recommandations, etc.)
-function EventCard({ event, onClick }) {
+
+interface EventCardProps {
+  event: Event
+  onClick: () => void
+}
+
+function EventCard({ event, onClick }: EventCardProps) {
   return (
     <article className="event-card" onClick={onClick}>
-      {/* Image de couverture (optionnelle) */}
       {event.image && (
         <img
           src={event.image}
@@ -226,18 +198,11 @@ function EventCard({ event, onClick }) {
       )}
 
       <div className="event-card-content">
-        {/* Badge catégorie */}
         <span className="category-badge">{event.category}</span>
-
-        {/* Titre de l'événement */}
         <h3>{event.title}</h3>
-
-        {/* Informations clés */}
         <p className="event-info">
           {event.date} — {event.city}
         </p>
-
-        {/* Prix et places disponibles */}
         <div className="event-footer">
           <span className="price">{event.price}€</span>
           <span className="places">
@@ -251,11 +216,18 @@ function EventCard({ event, onClick }) {
 
 // ============================================================
 // COMPOSANT : EventDetail
+// Page détail d'un événement + achat de billet
 // ============================================================
-// Affiche tous les détails d'un événement + bouton d'achat
-function EventDetail({ event, user, onBack }) {
+
+interface EventDetailProps {
+  event: Event
+  user: User | null
+  onBack: () => void
+}
+
+function EventDetail({ event, user, onBack }: EventDetailProps) {
   const handleBuyTicket = () => {
-    // Logique d'achat (sera conectada à l'API backend)
+    // TODO: appeler l'API POST /tickets
     alert(`Achat d'un billet pour : ${event.title}`)
   }
 
@@ -288,7 +260,6 @@ function EventDetail({ event, user, onBack }) {
             <li><strong>Places disponibles :</strong> {event.availablePlaces}</li>
           </ul>
 
-          {/* Bouton d'achat — désactivé si pas de places ou non connecté */}
           <button
             className="btn-buy"
             onClick={handleBuyTicket}
@@ -307,30 +278,34 @@ function EventDetail({ event, user, onBack }) {
 }
 
 // ============================================================
-// COMPOSANT : Auth (inscription / connexion)
+// COMPOSANT : Auth
+// Formulaire inscription / connexion
 // ============================================================
-// Gère les deux formulaires avec un prop 'mode'
-function Auth({ mode, onAuth, onSwitchMode }) {
-  // state local pour les champs du formulaire
+
+interface AuthProps {
+  mode: 'login' | 'register'
+  onAuth: (user: User) => void
+  onSwitchMode: () => void
+}
+
+function Auth({ mode, onAuth, onSwitchMode }: AuthProps) {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
   })
 
-  // Mise à jour des champs lors de la saisie
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
-      ...formData,       // garde les autres champs existants
-      [e.target.name]: e.target.value // met à jour le champ modifié
+      ...formData,
+      [e.target.name]: e.target.value,
     })
   }
 
-  // Soumission du formulaire
-  const handleSubmit = (e) => {
-    e.preventDefault() // empêche le rechargement de la page
-    // Envoi des données (sera géré par l'API backend)
-    onAuth({ id: 1, name: formData.name || 'Utilisateur' })
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    // TODO: appeler l'API POST /auth/login ou /auth/register
+    onAuth({ id: '1', name: formData.name || 'Utilisateur', email: formData.email, role: 'user' })
   }
 
   return (
@@ -339,7 +314,6 @@ function Auth({ mode, onAuth, onSwitchMode }) {
         <h2>{mode === 'login' ? 'Connexion' : 'Inscription'}</h2>
 
         <form onSubmit={handleSubmit}>
-          {/* Champ nom (inscription uniquement) */}
           {mode === 'register' && (
             <div className="form-group">
               <label htmlFor="name">Nom</label>
@@ -354,7 +328,6 @@ function Auth({ mode, onAuth, onSwitchMode }) {
             </div>
           )}
 
-          {/* Champ email */}
           <div className="form-group">
             <label htmlFor="email">Email</label>
             <input
@@ -367,7 +340,6 @@ function Auth({ mode, onAuth, onSwitchMode }) {
             />
           </div>
 
-          {/* Champ mot de passe */}
           <div className="form-group">
             <label htmlFor="password">Mot de passe</label>
             <input
@@ -385,7 +357,6 @@ function Auth({ mode, onAuth, onSwitchMode }) {
           </button>
         </form>
 
-        {/* Lien pour basculer entre inscription et connexion */}
         <p className="auth-switch">
           {mode === 'login' ? (
             <>Pas de compte ? <button onClick={onSwitchMode}>Inscrivez-vous</button></>
@@ -400,11 +371,16 @@ function Auth({ mode, onAuth, onSwitchMode }) {
 
 // ============================================================
 // COMPOSANT : MyTickets
+// Liste des billets de l'utilisateur
 // ============================================================
-// Affiche les billets de l'utilisateur connecté
-function MyTickets({ userId }) {
-  // État pour stocker les billets (sera-fetched depuis l'API)
-  const [tickets, setTickets] = useState([])
+
+interface MyTicketsProps {
+  userId: string
+}
+
+function MyTickets({ userId }: MyTicketsProps) {
+  // TODO: fetch GET /tickets depuis l'API
+  const [tickets] = useState<Array<{ id: string; eventTitle: string; date: string; qrCode: string }>>([])
 
   return (
     <main className="my-tickets">
@@ -418,7 +394,6 @@ function MyTickets({ userId }) {
             <div key={ticket.id} className="ticket-card">
               <h3>{ticket.eventTitle}</h3>
               <p>{ticket.date}</p>
-              {/* QR Code (sera affiché via une librarie) */}
               <div className="qr-placeholder">{ticket.qrCode}</div>
             </div>
           ))}
