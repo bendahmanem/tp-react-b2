@@ -12,7 +12,6 @@ import MyTickets from './components/MyTickets'
 import './App.css'
 
 export default function App() {
-  const [events, setEvents] = useState<Event[]>([])
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   const [currentView, setCurrentView] = useState<ViewName>('home')
   const [user, setUser] = useState<User | null>(null)
@@ -42,7 +41,6 @@ export default function App() {
 
       {currentView === 'home' && (
         <EventList
-          events={events}
           onSelectEvent={(event: Event) => navigateTo('detail', event)}
         />
       )}
