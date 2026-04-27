@@ -1,8 +1,8 @@
 /**
  * Point d'entrée de l'application React — EventHub
  *
- * Ce fichier mounting le composant racine App dans le DOM.
- * StrictMode active des checks supplémentaires en développement.
+ * Ce fichier monte le composant racine App dans le DOM.
+ * StrictMode active des vérifications supplémentaires en développement.
  */
 
 import { StrictMode } from 'react'
