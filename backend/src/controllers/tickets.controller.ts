@@ -4,6 +4,7 @@
 
 import { Request, Response } from 'express';
 import db from '../services/db.js';
+import { TicketStatus } from '../models/ticket.js';
 
 /**
  * POST /tickets
@@ -23,7 +24,7 @@ export async function buyTicket(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const event = db.events.findById(eventId);
+    const event = db.events.findById(eventId!);
 
     if (!event) {
       res.status(404).json({ error: 'Event not found' });
@@ -119,7 +120,7 @@ export async function getTicketById(req: Request, res: Response): Promise<void> 
     }
 
     const { id } = req.params;
-    const ticket = db.tickets.findById(id);
+    const ticket = db.tickets.findById(id!);
 
     if (!ticket) {
       res.status(404).json({ error: 'Ticket not found' });
@@ -184,14 +185,14 @@ export async function updateTicketStatus(req: Request, res: Response): Promise<v
       return;
     }
 
-    const ticket = db.tickets.findById(id);
+    const ticket = db.tickets.findById(id!);
 
     if (!ticket) {
       res.status(404).json({ error: 'Ticket not found' });
       return;
     }
 
-    const updated = db.tickets.updateStatus(id, status as 'valid' | 'used' | 'cancelled');
+    const updated = db.tickets.updateStatus(id!, status as TicketStatus);
 
     res.json({
       message: 'Ticket status updated',

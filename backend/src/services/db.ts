@@ -1,16 +1,16 @@
 /**
- * Couche d'accès aux données — EventHub (SQLite)
+ * Couche d'acces aux donnees — EventHub (SQLite)
  *
- * Ce fichier remplace le store en mémoire par des opérations SQLite.
- * Chaque fonction correspond à une requête SQL préparée.
+ * Ce fichier remplace le store en memoire par des operations SQLite.
+ * Chaque fonction correspond a une requete SQL preparee.
  *
  * Avantages de SQLite vs in-memory :
- * - Persistance des données entre les redémarrages
- * - Transactions ACID pour la cohérence des données
- * - Requêtes complexes via SQL (JOIN, GROUP BY, etc.)
+ * - Persistance des donnees entre les redemarrages
+ * - Transactions ACID pour la coherence des donnees
+ * - Requetes complexes via SQL (JOIN, GROUP BY, etc.)
  */
 
-import db from './database.js';
+import sqliteDb from './database.js';
 import { User, CreateUserDto, UserRole } from '../models/user.js';
 import { Event, CreateEventDto, UpdateEventDto, EventCategory, EventFilters } from '../models/event.js';
 import { Ticket, CreateTicketDto, TicketStatus, TicketStats } from '../models/ticket.js';
@@ -30,7 +30,7 @@ function now(): string {
 // =============================================================================
 
 async function createUser(dto: CreateUserDto): Promise<User> {
-  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(dto.email);
+  const existing = sqliteDb.prepare('SELECT id FROM users WHERE email = ?').get(dto.email);
   if (existing) {
     throw new Error('EMAIL_ALREADY_EXISTS');
   }
@@ -39,7 +39,7 @@ async function createUser(dto: CreateUserDto): Promise<User> {
   const passwordHash = await bcrypt.hash(dto.password, 10);
   const createdAt = now();
 
-  db.prepare(`
+  sqliteDb.prepare(`
     INSERT INTO users (id, email, password_hash, name, role, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(id, dto.email, passwordHash, dto.name, dto.role ?? UserRole.USER, createdAt, createdAt);
@@ -55,7 +55,7 @@ async function createUser(dto: CreateUserDto): Promise<User> {
 }
 
 async function findUserByEmail(email: string): Promise<User | undefined> {
-  const row = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+  const row = sqliteDb.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
   if (!row) return undefined;
   return {
     id: row.id,
@@ -69,7 +69,7 @@ async function findUserByEmail(email: string): Promise<User | undefined> {
 }
 
 async function findUserById(id: string): Promise<User | undefined> {
-  const row = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as any;
+  const row = sqliteDb.prepare('SELECT * FROM users WHERE id = ?').get(id) as any;
   if (!row) return undefined;
   return {
     id: row.id,
@@ -86,19 +86,20 @@ async function verifyPassword(user: User, password: string): Promise<boolean> {
   return bcrypt.compare(password, user.passwordHash);
 }
 
-function updateUser(id: string, dto: { name: string }): User {
+async function updateUser(id: string, dto: { name: string }): Promise<User> {
   const updatedAt = now();
-  db.prepare('UPDATE users SET name = ?, updated_at = ? WHERE id = ?').run(dto.name, updatedAt, id);
-  const user = findUserById(id);
+  sqliteDb.prepare('UPDATE users SET name = ?, updated_at = ? WHERE id = ?').run(dto.name, updatedAt, id);
+  const user = await findUserById(id);
   if (!user) throw new Error('USER_NOT_FOUND');
   return user;
 }
 
 function getAllUsers(): User[] {
-  const rows = db.prepare('SELECT * FROM users').all() as any[];
+  const rows = sqliteDb.prepare('SELECT * FROM users').all() as any[];
   return rows.map(row => ({
     id: row.id,
     email: row.email,
+    passwordHash: row.password_hash,
     name: row.name,
     role: row.role,
     createdAt: new Date(row.created_at),
@@ -114,28 +115,27 @@ function createEvent(dto: CreateEventDto, organizerId: string): Event {
   const id = uuidv4();
   const createdAt = now();
 
-  db.prepare(`
+  sqliteDb.prepare(`
     INSERT INTO events (id, title, description, date, time, location, city, price, total_places, available_places, category, image, organizer_id, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, dto.title, dto.description, dto.date, dto.time,
     dto.location, dto.city, dto.price, dto.totalPlaces,
-    dto.totalPlaces, // available = total au départ
-    dto.category, dto.image ?? null, organizerId, createdAt, createdAt
+    dto.totalPlaces, dto.category, dto.image ?? null, organizerId, createdAt, createdAt
   );
 
   return findEventById(id)!;
 }
 
 function findEventById(id: string): Event | undefined {
-  const row = db.prepare('SELECT * FROM events WHERE id = ?').get(id) as any;
+  const row = sqliteDb.prepare('SELECT * FROM events WHERE id = ?').get(id) as any;
   if (!row) return undefined;
   return mapRowToEvent(row);
 }
 
 function findEvents(filters?: EventFilters): Event[] {
   let sql = 'SELECT * FROM events WHERE 1=1';
-  const params: any[] = [];
+  const params: (string | number)[] = [];
 
   if (filters?.category) {
     sql += ' AND category = ?';
@@ -158,17 +158,21 @@ function findEvents(filters?: EventFilters): Event[] {
   }
 
   if (filters?.upcomingOnly) {
-    sql += ` AND date >= '${new Date().toISOString().split('T')[0]}'`;
+    const today = new Date().toISOString().split('T')[0];
+    if (today !== undefined) {
+      sql += ' AND date >= ?';
+      params.push(today);
+    }
   }
 
   sql += ' ORDER BY date ASC';
 
-  const rows = db.prepare(sql).all(...params) as any[];
+  const rows = sqliteDb.prepare(sql).all(...params) as any[];
   return rows.map(mapRowToEvent);
 }
 
 function findEventsByOrganizer(organizerId: string): Event[] {
-  const rows = db.prepare('SELECT * FROM events WHERE organizer_id = ? ORDER BY date ASC').all(organizerId) as any[];
+  const rows = sqliteDb.prepare('SELECT * FROM events WHERE organizer_id = ? ORDER BY date ASC').all(organizerId) as any[];
   return rows.map(mapRowToEvent);
 }
 
@@ -177,7 +181,7 @@ function updateEvent(id: string, dto: UpdateEventDto): Event {
   if (!event) throw new Error('EVENT_NOT_FOUND');
 
   const updates: string[] = [];
-  const params: any[] = [];
+  const params: (string | number | null)[] = [];
 
   if (dto.title !== undefined) { updates.push('title = ?'); params.push(dto.title); }
   if (dto.description !== undefined) { updates.push('description = ?'); params.push(dto.description); }
@@ -204,7 +208,7 @@ function updateEvent(id: string, dto: UpdateEventDto): Event {
   params.push(now());
   params.push(id);
 
-  db.prepare(`UPDATE events SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  sqliteDb.prepare(`UPDATE events SET ${updates.join(', ')} WHERE id = ?`).run(...params);
   return findEventById(id)!;
 }
 
@@ -212,13 +216,13 @@ function deleteEvent(id: string): boolean {
   const event = findEventById(id);
   if (!event) return false;
 
-  const sold = db.prepare('SELECT COUNT(*) as count FROM tickets WHERE event_id = ? AND status != ?').get(id, TicketStatus.CANCELLED) as any;
+  const sold = sqliteDb.prepare('SELECT COUNT(*) as count FROM tickets WHERE event_id = ? AND status != ?').get(id, TicketStatus.CANCELLED) as any;
   if (sold && sold.count > 0) {
     throw new Error('EVENT_HAS_SOLD_TICKETS');
   }
 
-  db.prepare('DELETE FROM tickets WHERE event_id = ?').run(id);
-  const result = db.prepare('DELETE FROM events WHERE id = ?').run(id);
+  sqliteDb.prepare('DELETE FROM tickets WHERE event_id = ?').run(id);
+  const result = sqliteDb.prepare('DELETE FROM events WHERE id = ?').run(id);
   return result.changes > 0;
 }
 
@@ -234,7 +238,7 @@ function createTicket(dto: CreateTicketDto): Ticket {
     throw new Error('EVENT_SOLD_OUT');
   }
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toISOString().split('T')[0] ?? '';
   if (event.date < today) {
     throw new Error('EVENT_PAST');
   }
@@ -243,12 +247,12 @@ function createTicket(dto: CreateTicketDto): Ticket {
   const qrCode = uuidv4();
   const purchaseDate = now();
 
-  db.prepare(`
+  sqliteDb.prepare(`
     INSERT INTO tickets (id, qr_code, event_id, user_id, status, purchase_date)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(id, qrCode, dto.eventId, dto.userId, TicketStatus.VALID, purchaseDate);
 
-  db.prepare('UPDATE events SET available_places = available_places - 1 WHERE id = ?').run(dto.eventId);
+  sqliteDb.prepare('UPDATE events SET available_places = available_places - 1 WHERE id = ?').run(dto.eventId);
 
   return {
     id,
@@ -261,18 +265,18 @@ function createTicket(dto: CreateTicketDto): Ticket {
 }
 
 function findTicketById(id: string): Ticket | undefined {
-  const row = db.prepare('SELECT * FROM tickets WHERE id = ?').get(id) as any;
+  const row = sqliteDb.prepare('SELECT * FROM tickets WHERE id = ?').get(id) as any;
   if (!row) return undefined;
   return mapRowToTicket(row);
 }
 
 function findTicketsByUser(userId: string): Ticket[] {
-  const rows = db.prepare('SELECT * FROM tickets WHERE user_id = ? ORDER BY purchase_date DESC').all(userId) as any[];
+  const rows = sqliteDb.prepare('SELECT * FROM tickets WHERE user_id = ? ORDER BY purchase_date DESC').all(userId) as any[];
   return rows.map(mapRowToTicket);
 }
 
 function findTicketsByEvent(eventId: string): Ticket[] {
-  const rows = db.prepare('SELECT * FROM tickets WHERE event_id = ?').all(eventId) as any[];
+  const rows = sqliteDb.prepare('SELECT * FROM tickets WHERE event_id = ?').all(eventId) as any[];
   return rows.map(mapRowToTicket);
 }
 
@@ -281,7 +285,7 @@ function updateTicketStatus(id: string, status: TicketStatus): Ticket {
   if (!ticket) throw new Error('TICKET_NOT_FOUND');
 
   const updates: string[] = ['status = ?'];
-  const params: any[] = [status];
+  const params: (string | null)[] = [status];
 
   if (status === TicketStatus.USED) {
     updates.push('used_at = ?');
@@ -292,17 +296,17 @@ function updateTicketStatus(id: string, status: TicketStatus): Ticket {
   }
 
   params.push(id);
-  db.prepare(`UPDATE tickets SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  sqliteDb.prepare(`UPDATE tickets SET ${updates.join(', ')} WHERE id = ?`).run(...params);
 
   if (status === TicketStatus.CANCELLED) {
-    db.prepare('UPDATE events SET available_places = available_places + 1 WHERE id = ?').run(ticket.eventId);
+    sqliteDb.prepare('UPDATE events SET available_places = available_places + 1 WHERE id = ?').run(ticket.eventId);
   }
 
   return findTicketById(id)!;
 }
 
 function getTicketStatsByOrganizer(organizerId: string): TicketStats {
-  const rows = db.prepare(`
+  const rows = sqliteDb.prepare(`
     SELECT t.* FROM tickets t
     JOIN events e ON t.event_id = e.id
     WHERE e.organizer_id = ?

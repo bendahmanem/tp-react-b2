@@ -1,56 +1,43 @@
 /**
- * Base de données SQLite — EventHub
+ * Base de donnees SQLite — EventHub
  *
- * Ce fichier gère la connexion et le schéma de la base SQLite.
- * better-sqlite3 est synchrone (pas de callback/async) — plus simple
- * pour un serveur Express en Node.js.
- *
- * Schéma des tables :
- * - users       : comptes utilisateurs
- * - events      : événements billetterie
- * - tickets     : billets achetés
- * - schema_migrations : historique des migrations appliquées
+ * Ce fichier gere la connexion et le schema de la base SQLite.
+ * better-sqlite3 est synchrone — plus simple pour un serveur Express.
  */
 
 import Database from 'better-sqlite3';
+import type { Database as DatabaseType } from 'better-sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // =============================================================================
-// CONNEXION À LA BASE
+// CONNEXION A LA BASE
 // =============================================================================
 
-/**
- * Chemin de la base SQLite — dans le dossier backend/data/
- * Créé automatiquement si absent.
- */
 const DB_DIR = path.join(__dirname, '../../data');
 const DB_PATH = path.join(DB_DIR, 'eventhub.db');
 
-// Import dynamique pour créer le répertoire avant d'ouvrir la DB
-import fs from 'fs';
 if (!fs.existsSync(DB_DIR)) {
   fs.mkdirSync(DB_DIR, { recursive: true });
 }
 
-import type { Database } from 'better-sqlite3';
-
-const db: Database = new Database(DB_PATH);
+const db: DatabaseType = new Database(DB_PATH);
 
 // Mode WAL pour de meilleures performances en lecture concurrence
 db.pragma('journal_mode = WAL');
 
-// foreign_keys active les contraintes de clé étrangère
+// foreign_keys active les contraintes de cle etrangere
 db.pragma('foreign_keys = ON');
 
 // =============================================================================
-// INITIALISATION DU SCHÉMA
+// INITIALISATION DU SCHEMA
 // =============================================================================
 
 db.exec(`
-  -- Table des utilisateurs
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
@@ -61,7 +48,6 @@ db.exec(`
     updated_at TEXT NOT NULL
   );
 
-  -- Table des événements
   CREATE TABLE IF NOT EXISTS events (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
@@ -81,7 +67,6 @@ db.exec(`
     FOREIGN KEY (organizer_id) REFERENCES users(id)
   );
 
-  -- Table des billets
   CREATE TABLE IF NOT EXISTS tickets (
     id TEXT PRIMARY KEY,
     qr_code TEXT NOT NULL UNIQUE,
@@ -95,15 +80,10 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
 
-  -- Table de suivi des migrations (pour références futures)
   CREATE TABLE IF NOT EXISTS schema_migrations (
     version INTEGER PRIMARY KEY,
     applied_at TEXT NOT NULL
   );
 `);
-
-// =============================================================================
-// EXPORTS
-// =============================================================================
 
 export default db;

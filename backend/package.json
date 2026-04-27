@@ -1,6 +1,7 @@
 {
   "name": "eventhub-backend",
   "version": "1.0.0",
+  "type": "module",
   "description": "EventHub API REST — Backend de billetterie en ligne",
   "main": "dist/index.js",
   "scripts": {

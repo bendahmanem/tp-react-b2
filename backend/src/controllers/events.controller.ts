@@ -64,7 +64,7 @@ export async function getEventById(req: Request, res: Response): Promise<void> {
   try {
     const { id } = req.params;
 
-    const event = db.events.findById(id);
+    const event = db.events.findById(id!);
 
     if (!event) {
       res.status(404).json({ error: 'Event not found' });
@@ -159,7 +159,7 @@ export async function updateEvent(req: Request, res: Response): Promise<void> {
     }
 
     const { id } = req.params;
-    const event = db.events.findById(id);
+    const event = db.events.findById(id!);
 
     if (!event) {
       res.status(404).json({ error: 'Event not found' });
@@ -186,7 +186,7 @@ export async function updateEvent(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const updated = db.events.update(id, req.body);
+    const updated = db.events.update(id!, req.body);
 
     res.json(updated);
   } catch (error) {
@@ -212,7 +212,7 @@ export async function deleteEvent(req: Request, res: Response): Promise<void> {
     }
 
     const { id } = req.params;
-    const event = db.events.findById(id);
+    const event = db.events.findById(id!);
 
     if (!event) {
       res.status(404).json({ error: 'Event not found' });
@@ -225,7 +225,7 @@ export async function deleteEvent(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    db.events.delete(id);
+    db.events.delete(id!);
 
     res.json({ message: 'Event deleted successfully' });
   } catch (error) {

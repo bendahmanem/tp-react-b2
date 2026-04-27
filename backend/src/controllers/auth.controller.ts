@@ -172,7 +172,7 @@ export async function updateMe(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const updated = db.users.update(req.user.sub, { name: name.trim() });
+    const updated = await db.users.update(req.user.sub, { name: name.trim() });
 
     res.json({
       id: updated.id,
@@ -203,7 +203,7 @@ function generateToken(userId: string, email: string, role: string): string {
   return jwt.sign(
     { sub: userId, email, role },
     config.jwtSecret,
-    { expiresIn: config.jwtExpiresIn }
+    { expiresIn: config.jwtExpiresIn as jwt.SignOptions['expiresIn'] }
   );
 }
 
