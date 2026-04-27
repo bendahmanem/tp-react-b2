@@ -1,8 +1,13 @@
 /**
- * Composant EventDetail — Page détail d'un événement + achat
+ * Composant EventDetail — Page detail d'un evenement + achat de billet
+ *
+ * Affiche les details d'un evenement et permet d'acheter un billet
+ * via POST /tickets si l'utilisateur est connecte.
  */
 
+import { useState } from 'react'
 import type { Event, User } from '../types'
+import { buyTicket } from '../services/api'
 
 interface EventDetailProps {
   event: Event
@@ -11,23 +16,32 @@ interface EventDetailProps {
 }
 
 export default function EventDetail({ event, user, onBack }: EventDetailProps) {
-  const handleBuyTicket = () => {
-    alert(`Achat d'un billet pour : ${event.title}`)
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  const handleBuyTicket = async () => {
+    if (!user) return
+
+    setLoading(true)
+    setMessage(null)
+
+    try {
+      await buyTicket(event.id)
+      setMessage({ type: 'success', text: 'Billet achete avec succes !' })
+    } catch (err) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Erreur lors de l\'achat.' })
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
     <main className="event-detail">
-      <button onClick={onBack} className="btn-back">
-        ← Retour aux événements
-      </button>
+      <button onClick={onBack} className="btn-back">← Retour aux evenements</button>
 
       <article className="detail-content">
         {event.image && (
-          <img
-            src={event.image}
-            alt={event.title}
-            className="detail-image"
-          />
+          <img src={event.image} alt={event.title} className="detail-image" />
         )}
 
         <div className="detail-info">
@@ -44,16 +58,18 @@ export default function EventDetail({ event, user, onBack }: EventDetailProps) {
             <li><strong>Places disponibles :</strong> {event.availablePlaces}</li>
           </ul>
 
+          {message && (
+            <p style={{ color: message.type === 'success' ? 'green' : 'red' }}>
+              {message.text}
+            </p>
+          )}
+
           <button
             className="btn-buy"
             onClick={handleBuyTicket}
-            disabled={event.availablePlaces === 0 || !user}
+            disabled={event.availablePlaces === 0 || !user || loading}
           >
-            {event.availablePlaces === 0
-              ? 'Complet'
-              : !user
-              ? 'Connectez-vous pour acheter'
-              : 'Acheter un billet'}
+            {loading ? 'Achat en cours...' : event.availablePlaces === 0 ? 'Complet' : !user ? 'Connectez-vous pour acheter' : 'Acheter un billet'}
           </button>
         </div>
       </article>
