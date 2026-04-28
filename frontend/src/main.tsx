@@ -1,19 +1,18 @@
 /**
- * Point d'entrée de l'application React — EventHub
- *
- * Ce fichier monte le composant racine App dans le DOM.
- * StrictMode active des vérifications supplémentaires en développement.
+ * Point d'entree — EventHub
  */
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import App from './App.tsx'
+import { UserProvider } from './context/UserContext'
+import { RouterProvider } from 'react-router'
+import { router } from './router'
 
-// Monte le composant App dans l'élément #root du HTML
-// createRoot remplace l'ancienne API ReactDOM.render
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <UserProvider>
+      <RouterProvider router={router} />
+    </UserProvider>
   </StrictMode>,
 )
