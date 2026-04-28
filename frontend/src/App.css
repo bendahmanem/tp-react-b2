@@ -400,3 +400,67 @@ body {
   padding: 0.5rem 1rem;
   border-radius: 4px;
 }
+/* =============================================================================
+   LAYOUT (Header + Footer)
+   ============================================================================= */
+
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.main-content {
+  flex: 1;
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* =============================================================================
+   FOOTER
+   ============================================================================= */
+
+.footer {
+  background-color: #212529;
+  color: #f8f9fa;
+  padding: 1.5rem 2rem;
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.footer-brand p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.footer-copy {
+  color: #868e96;
+  font-size: 0.8rem;
+  margin-top: 0.25rem !important;
+}
+
+.footer-nav {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.footer-nav button {
+  background: none;
+  border: none;
+  color: #adb5bd;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.footer-nav button:hover {
+  color: #f8f9fa;
+}
